@@ -1,0 +1,272 @@
+import streamlit as st
+import pandas as pd
+import io
+from openpyxl import Workbook
+from openpyxl.utils.dataframe import dataframe_to_rows
+
+class SCCalculator:
+    def __init__(self):
+        # Streamlit page configuration
+        st.set_page_config(page_title="短路电流计算器", layout="wide")
+        st.title("短路电流计算器")
+
+        # Initialize session state
+        if 'result_dfs' not in st.session_state:
+            st.session_state.result_dfs = {}
+        if 'bus_names' not in st.session_state:
+            st.session_state.bus_names = []
+        if 'files_loaded' not in st.session_state:
+            st.session_state.files_loaded = False
+        if 'ds_input' not in st.session_state:
+            st.session_state.ds_input = ""
+        if 'ds1_input' not in st.session_state:
+            st.session_state.ds1_input = ""
+
+        # File uploader
+        st.subheader("上传CSV文件")
+        uploaded_files = st.file_uploader("选择CSV文件", type=["csv"], accept_multiple_files=True)
+
+        # Process files when uploaded
+        if uploaded_files and not st.session_state.files_loaded:
+            self.load_files(uploaded_files)
+
+        # DS and DS1 inputs with autocomplete
+        if st.session_state.files_loaded:
+            st.subheader("输入参数")
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.write("母线名 (DS, 逗号分隔):")
+                ds_input = st.text_input("DS输入", value=st.session_state.ds_input, key="ds_input_field")
+                # Autocomplete suggestions for DS
+                if ds_input:
+                    suggestions = [name for name in st.session_state.bus_names if ds_input.lower() in name.lower()]
+                    if suggestions:
+                        selected = st.selectbox("选择建议 (DS)", [""] + suggestions, key="ds_suggest")
+                        if selected:
+                            st.session_state.ds_input = selected
+                            ds_input = selected
+                else:
+                    suggestions = st.session_state.bus_names
+                    st.selectbox("选择建议 (DS)", [""] + suggestions, key="ds_suggest_empty")
+
+            with col2:
+                st.write("显示名称 (DS1, 逗号分隔):")
+                ds1_input = st.text_input("DS1输入", value=st.session_state.ds1_input, key="ds1_input_field")
+                # Autocomplete suggestions for DS1
+                if ds1_input:
+                    suggestions = [name for name in st.session_state.bus_names if ds1_input.lower() in name.lower()]
+                    if suggestions:
+                        selected = st.selectbox("选择建议 (DS1)", [""] + suggestions, key="ds1_suggest")
+                        if selected:
+                            st.session_state.ds1_input = selected
+                            ds1_input = selected
+                else:
+                    suggestions = st.session_state.bus_names
+                    st.selectbox("选择建议 (DS1)", [""] + suggestions, key="ds1_suggest_empty")
+
+            # Store inputs
+            self.ds_input = ds_input
+            self.ds1_input = ds1_input
+            self.uploaded_files = uploaded_files
+
+            # Calculate button
+            if st.button("计算"):
+                self.calculate()
+
+        # Display results
+        if st.session_state.result_dfs:
+            st.subheader("计算结果")
+            for file_name, df in st.session_state.result_dfs.items():
+                with st.expander(f"结果: {file_name}"):
+                    st.dataframe(df, use_container_width=True)
+
+        # Export button
+        if st.session_state.result_dfs:
+            excel_data = self.export_to_excel()
+            st.download_button(
+                label="导出到Excel",
+                data=excel_data,
+                file_name="short_circuit_results.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+    def load_files(self, uploaded_files):
+        """Load CSV files and extract unique bus names."""
+        with st.spinner("正在加载文件..."):
+            bus_names = set()
+            for uploaded_file in uploaded_files:
+                try:
+                    df = pd.read_csv(uploaded_file, encoding='gbk', index_col=False)
+                    if '母线名' in df.columns:
+                        bus_names.update(df['母线名'].dropna().astype(str).unique())
+                    else:
+                        st.warning(f"文件 {uploaded_file.name} 缺少 '母线名' 列")
+                except Exception as e:
+                    st.error(f"加载文件 {uploaded_file.name} 失败: {str(e)}")
+                    return
+            st.session_state.bus_names = sorted(list(bus_names))
+            st.session_state.files_loaded = True
+            st.session_state.uploaded_files = uploaded_files
+            st.success("文件加载完成！请在下方输入DS和DS1。")
+
+    def calculate(self):
+        if not st.session_state.uploaded_files:
+            st.error("请先上传CSV文件")
+            return
+
+        ds = [x.strip() for x in self.ds_input.split(',') if x.strip()]
+        ds1 = [x.strip() for x in self.ds1_input.split(',') if x.strip()]
+
+        if not ds or not ds1:
+            st.error("请填写DS和DS1")
+            return
+
+        if len(ds) != len(ds1):
+            st.error("DS和DS1的条目数量必须相同")
+            return
+
+        st.session_state.result_dfs.clear()
+
+        for uploaded_file in st.session_state.uploaded_files:
+            file_name = uploaded_file.name
+            try:
+                # Reset file pointer and read CSV
+                uploaded_file.seek(0)
+                sccp = pd.read_csv(uploaded_file, encoding='gbk', index_col=False)
+                required_columns = ['母线名', '故障类型']
+                if not all(col in sccp.columns for col in required_columns):
+                    missing = [col for col in required_columns if col not in sccp.columns]
+                    st.error(f"文件 {file_name} 缺少必要列: {', '.join(missing)}")
+                    return
+
+                # Ensure fifth column exists
+                if len(sccp.columns) < 5:
+                    st.error(f"文件 {file_name} 列数不足，缺少短路电流数据（第5列）")
+                    return
+
+                S2 = []
+                S1 = []
+
+                # Process data
+                for i in ds:
+                    found = False
+                    for row in sccp.itertuples():
+                        if i in row.母线名:
+                            found = True
+                            if row.故障类型 == '单相':
+                                dict_sccp = {row.母线名: row[5]}
+                                S1.append(dict_sccp)
+                            elif row.故障类型 == '三相':
+                                dict_sccp = {row.母线名: row[5]}
+                                S2.append(dict_sccp)
+                    if not found:
+                        st.warning(f"文件 {file_name} 中未找到母线名包含 '{i}' 的记录")
+
+                # Check if any data was found
+                if not S1 and not S2:
+                    st.error(f"文件 {file_name} 未找到任何匹配的单相或三相故障数据")
+                    return
+
+                substation2 = []
+                sc2 = []
+                for i in S2:
+                    keys_values = i.items()
+                    for key, value in keys_values:
+                        substation2.append(key)
+                        sc2.append(value)
+
+                SD2 = {'substation': substation2, 'sc': sc2}
+                df2 = pd.DataFrame(SD2)
+
+                substation1 = []
+                sc1 = []
+                for i in S1:
+                    keys_values = i.items()
+                    for key, value in keys_values:
+                        substation1.append(key)
+                        sc1.append(value)
+
+                SD1 = {'substation': substation1, 'sc': sc1}
+                df1 = pd.DataFrame(SD1)
+
+                # Check if DataFrames are empty
+                if df2.empty and df1.empty:
+                    st.error(f"文件 {file_name} 处理后未生成有效数据，请检查DS输入和CSV内容")
+                    return
+
+                X1 = list(zip(ds, ds1))
+                df2c = df2.copy()
+                df1c = df1.copy()
+                DF2 = pd.DataFrame()
+                DF1 = pd.DataFrame()
+
+                # Assign sub_name for three-phase faults
+                for i in df2.index:
+                    matched = False
+                    for name in X1:
+                        if df2.loc[i]['substation'] == name[0]:
+                            df2c.at[i, 'sub_name'] = name[1]
+                            matched = True
+                            break
+                    if not matched:
+                        df2c.at[i, 'sub_name'] = df2.loc[i]['substation']
+
+                DF2['sub_name'] = df2c['sub_name']
+                DF2['sc'] = df2c['sc']
+
+                # Assign sub_name for single-phase faults
+                for i in df1.index:
+                    matched = False
+                    for name in X1:
+                        if df1.loc[i]['substation'] == name[0]:
+                            df1c.at[i, 'sub_name'] = name[1]
+                            matched = True
+                            break
+                    if not matched:
+                        df1c.at[i, 'sub_name'] = df1.loc[i]['substation']
+
+                DF1['sub_name'] = df1c['sub_name']
+                DF1['sc'] = df1c['sc']
+
+                result_df = pd.DataFrame()
+                result_df['sub_name'] = DF2['sub_name']
+                result_df['sc2'] = DF2['sc']
+                result_df['sc1'] = DF1['sc']
+
+                # Handle potential NaN values
+                result_df = result_df.fillna('-')
+
+                # Round results
+                result_df[['sc2', 'sc1']] = result_df[['sc2', 'sc1']].apply(pd.to_numeric, errors='coerce').round(1)
+
+                # Store result
+                st.session_state.result_dfs[file_name] = result_df
+
+            except Exception as e:
+                st.error(f"处理文件 {file_name} 时发生错误: {str(e)}")
+                return
+
+        st.success("所有文件计算完成！")
+
+    def export_to_excel(self):
+        if not st.session_state.result_dfs:
+            st.error("没有可导出的结果")
+            return None
+
+        output = io.BytesIO()
+        wb = Workbook()
+        wb.remove(wb.active)
+
+        for file_name, df in st.session_state.result_dfs.items():
+            ws = wb.create_sheet(title=file_name)
+            ws['A1'] = file_name
+            for r_idx, row in enumerate(dataframe_to_rows(df, index=False, header=True), 2):
+                for c_idx, value in enumerate(row, 1):
+                    ws.cell(row=r_idx, column=c_idx).value = value
+
+        wb.save(output)
+        return output.getvalue()
+
+if __name__ == "__main__":
+    app = SCCalculator()

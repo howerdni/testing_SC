@@ -30,7 +30,7 @@ class SCCalculator:
         if uploaded_files and not st.session_state.files_loaded:
             self.load_files(uploaded_files)
 
-        # DS and DS1 inputs with autocomplete
+        # DS and DS1 inputs
         if st.session_state.files_loaded:
             st.subheader("输入参数")
             col1, col2 = st.columns(2)
@@ -38,34 +38,17 @@ class SCCalculator:
             with col1:
                 st.write("母线名 (DS, 逗号分隔):")
                 ds_input = st.text_input("DS输入", value=st.session_state.ds_input, key="ds_input_field")
-                # Autocomplete suggestions for DS
-                if ds_input:
-                    suggestions = [name for name in st.session_state.bus_names if ds_input.lower() in name.lower()]
-                    if suggestions:
-                        selected = st.selectbox("选择建议 (DS)", [""] + suggestions, key="ds_suggest")
-                        if selected:
-                            st.session_state.ds_input = selected
-                            ds_input = selected
-                else:
-                    suggestions = st.session_state.bus_names
-                    st.selectbox("选择建议 (DS)", [""] + suggestions, key="ds_suggest_empty")
+                # Single suggestion dropdown for DS
+                st.write("建议选择:")
+                st.selectbox("选择母线名以复制到DS输入", [""] + st.session_state.bus_names, key="ds_suggest")
 
             with col2:
                 st.write("显示名称 (DS1, 逗号分隔):")
                 ds1_input = st.text_input("DS1输入", value=st.session_state.ds1_input, key="ds1_input_field")
-                # Autocomplete suggestions for DS1
-                if ds1_input:
-                    suggestions = [name for name in st.session_state.bus_names if ds1_input.lower() in name.lower()]
-                    if suggestions:
-                        selected = st.selectbox("选择建议 (DS1)", [""] + suggestions, key="ds1_suggest")
-                        if selected:
-                            st.session_state.ds1_input = selected
-                            ds1_input = selected
-                else:
-                    suggestions = st.session_state.bus_names
-                    st.selectbox("选择建议 (DS1)", [""] + suggestions, key="ds1_suggest_empty")
 
             # Store inputs
+            st.session_state.ds_input = ds_input
+            st.session_state.ds1_input = ds1_input
             self.ds_input = ds_input
             self.ds1_input = ds1_input
             self.uploaded_files = uploaded_files

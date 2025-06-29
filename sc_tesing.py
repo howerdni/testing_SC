@@ -68,21 +68,17 @@ class SCCalculator:
                     index=0
                 )
 
-                # Function to handle appending
-                def append_to_ds():
+                # Handle append logic directly
+                if st.button("追加到DS", key="append_ds_button"):
                     if selected_bus:
-                        # Use the current text_input value
                         current_ds = st.session_state.get("ds_input_field", "").strip()
                         new_ds = selected_bus if not current_ds else f"{current_ds}，{selected_bus}"
                         st.session_state.ds_input = new_ds
-                        st.success(f"已追加: {selected_bus}")  # Temporary success message
-                        st.session_state.selected_bus = ""  # Reset selection
-                        st.rerun()  # Force UI refresh
+                        st.success(f"已追加: {selected_bus}")
+                        st.session_state.selected_bus = ""
+                        st.rerun()
                     else:
                         st.warning("请先从下拉菜单选择一个母线名")
-
-                # Button to append selected bus name
-                st.button("追加到DS", key="append_ds_button", on_click=append_to_ds)
                 
                 # JavaScript to handle Enter key press
                 st.markdown("""

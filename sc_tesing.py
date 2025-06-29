@@ -38,8 +38,6 @@ class SCCalculator:
             st.session_state.uploaded_files = []
             st.session_state.bus_names = []
             st.session_state.result_dfs = {}
-            st.session_state.ds_input = ""
-            st.session_state.ds1_input = ""
             st.session_state.selected_bus = ""
             st.info("已移除所有文件，请上传新文件以继续。")
         elif uploaded_files and uploaded_files != st.session_state.uploaded_files:
@@ -53,8 +51,13 @@ class SCCalculator:
         with col1:
             st.write("母线名 (DS, 逗号分隔):")
             st.text_input("DS输入", value=st.session_state.ds_input, key="ds_input_field")
-            st.caption("可用中文逗号（，）或英文逗号（,）分隔")
+            st.caption("可用中文逗号（，）或英文逗号（,）分隔。提示：使用 Ctrl+A 或 Cmd+A 选择全部文本删除。")
             
+            # Clear DS input button
+            if st.button("清除DS输入", key="clear_ds_button"):
+                st.session_state.ds_input = ""
+                st.rerun()
+
             # Bus name selection (only shown if files are loaded)
             if st.session_state.files_loaded:
                 st.write("选择母线名以追加到DS输入:")
@@ -149,8 +152,6 @@ class SCCalculator:
             st.session_state.files_loaded = True
             st.session_state.uploaded_files = uploaded_files
             st.session_state.result_dfs = {}
-            st.session_state.ds_input = ""
-            st.session_state.ds1_input = ""
             st.session_state.selected_bus = ""
             st.success("文件加载完成！请在下方输入DS和DS1。")
 

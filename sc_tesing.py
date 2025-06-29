@@ -8,8 +8,8 @@ import re
 class SCCalculator:
     def __init__(self):
         # Streamlit page configuration
-        st.set_page_config(page_title="短路电流计算器", layout="wide")
-        st.title("短路电流计算器")
+        st.set_page_config(page_title="短路电流计算结果筛选器", layout="wide")
+        st.title("短路电流计算结果筛选器")
 
         # Initialize session state
         if 'result_dfs' not in st.session_state:
@@ -46,17 +46,17 @@ class SCCalculator:
             # New or different files uploaded
             self.load_files(uploaded_files)
 
-        # DS and DS1 inputs
-        if st.session_state.files_loaded:
-            st.subheader("输入参数")
-            col1, col2 = st.columns(2)
+        # DS and DS1 inputs (shown regardless of files_loaded)
+        st.subheader("输入参数")
+        col1, col2 = st.columns(2)
 
-            with col1:
-                st.write("母线名 (DS, 逗号分隔):")
-                st.text_input("DS输入", value=st.session_state.ds_input, key="ds_input_field")
-                st.caption("可用中文逗号（，）或英文逗号（,）分隔")
-                
-                # Bus name selection
+        with col1:
+            st.write("母线名 (DS, 逗号分隔):")
+            st.text_input("DS输入", value=st.session_state.ds_input, key="ds_input_field")
+            st.caption("可用中文逗号（，）或英文逗号（,）分隔")
+            
+            # Bus name selection (only shown if files are loaded)
+            if st.session_state.files_loaded:
                 st.write("选择母线名以追加到DS输入:")
                 selected_bus = st.selectbox(
                     "选择母线名",
@@ -99,19 +99,19 @@ class SCCalculator:
                     </script>
                 """, unsafe_allow_html=True)
 
-            with col2:
-                st.write("显示名称 (DS1, 逗号分隔):")
-                ds1_input = st.text_input("DS1输入", value=st.session_state.ds1_input, key="ds1_input_field")
-                st.caption("可用中文逗号（，）或英文逗号（,）分隔")
+        with col2:
+            st.write("显示名称 (DS1, 逗号分隔):")
+            ds1_input = st.text_input("DS1输入", value=st.session_state.ds1_input, key="ds1_input_field")
+            st.caption("可用中文逗号（，）或英文逗号（,）分隔")
 
-                # Store DS1 input
-                st.session_state.ds1_input = ds1_input
-                self.ds1_input = ds1_input
-                self.uploaded_files = uploaded_files
+            # Store DS1 input
+            st.session_state.ds1_input = ds1_input
+            self.ds1_input = ds1_input
+            self.uploaded_files = uploaded_files
 
-            # Calculate button
-            if st.button("计算"):
-                self.calculate()
+        # Calculate button
+        if st.button("计算"):
+            self.calculate()
 
         # Display results
         if st.session_state.result_dfs:
@@ -268,11 +268,11 @@ class SCCalculator:
 
                 result_df = pd.DataFrame()
                 result_df['sub_name'] = DF2['sub_name']
-                result_df['sc2'] = DF2['sc']
-                result_df['sc1'] = DF1['sc']
+                result_df['三相'] = DF2['sc']
+                result_df['单相'] = DF1['sc']
 
                 result_df = result_df.fillna('-')
-                result_df[['sc2', 'sc1']] = result_df[['sc2', 'sc1']].apply(pd.to_numeric, errors='coerce').round(1)
+                result_df[['三相', '单相']] = result_df[['三相', '单相']].apply(pd.to_numeric, errors='coerce').round(1)
 
                 st.session_state.result_dfs[file_name] = result_df
 

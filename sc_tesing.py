@@ -53,7 +53,7 @@ class SCCalculator:
 
             with col1:
                 st.write("母线名 (DS, 逗号分隔):")
-                ds_input = st.text_input("DS输入", value=st.session_state.ds_input, key="ds_input_field")
+                st.text_input("DS输入", value=st.session_state.ds_input, key="ds_input_field")
                 st.caption("可用中文逗号（，）或英文逗号（,）分隔")
                 
                 # Bus name selection
@@ -64,17 +64,21 @@ class SCCalculator:
                     key="ds_suggest",
                     index=0
                 )
-                
-                # Button to append selected bus name
-                if st.button("追加到DS", key="append_ds_button"):
+
+                # Function to handle appending
+                def append_to_ds():
                     if selected_bus:
                         current_ds = st.session_state.ds_input.strip()
                         new_ds = selected_bus if not current_ds else f"{current_ds}，{selected_bus}"
                         st.session_state.ds_input = new_ds
                         st.write(f"已追加: {selected_bus}，当前DS输入: {new_ds}")
                         st.session_state.selected_bus = ""  # Reset selection
+                        st.experimental_rerun()  # Force UI refresh
                     else:
                         st.warning("请先从下拉菜单选择一个母线名")
+
+                # Button to append selected bus name
+                st.button("追加到DS", key="append_ds_button", on_click=append_to_ds)
                 
                 # JavaScript to handle Enter key press
                 st.markdown("""
@@ -100,12 +104,10 @@ class SCCalculator:
                 ds1_input = st.text_input("DS1输入", value=st.session_state.ds1_input, key="ds1_input_field")
                 st.caption("可用中文逗号（，）或英文逗号（,）分隔")
 
-            # Store inputs
-            st.session_state.ds_input = ds_input
-            st.session_state.ds1_input = ds1_input
-            self.ds_input = ds_input
-            self.ds1_input = ds1_input
-            self.uploaded_files = uploaded_files
+                # Store DS1 input
+                st.session_state.ds1_input = ds1_input
+                self.ds1_input = ds1_input
+                self.uploaded_files = uploaded_files
 
             # Calculate button
             if st.button("计算"):
@@ -157,8 +159,8 @@ class SCCalculator:
             return
 
         # Split DS and DS1 inputs using both English and Chinese commas
-        ds = [x.strip() for x in re.split(r'[,\uFF0C]', self.ds_input) if x.strip()]
-        ds1 = [x.strip() for x in re.split(r'[,\uFF0C]', self.ds1_input) if x.strip()]
+        ds = [x.strip() for x in re.split(r'[,\uFF0C]', st.session_state.ds_input) if x.strip()]
+        ds1 = [x.strip() for x in re.split(r'[,\uFF0C]', st.session_state.ds1_input) if x.strip()]
 
         if not ds or not ds1:
             st.error("请填写DS和DS1")

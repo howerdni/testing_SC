@@ -103,11 +103,10 @@ class SCCalculator:
             st.write("显示名称 (DS1, 逗号分隔):")
             ds1_input = st.text_input("DS1输入", value=st.session_state.ds1_input, key="ds1_input_field")
             st.caption("可用中文逗号（，）或英文逗号（,）分隔")
-
-            # Store DS1 input
             st.session_state.ds1_input = ds1_input
-            self.ds1_input = ds1_input
-            self.uploaded_files = uploaded_files
+
+        # Update uploaded_files
+        st.session_state.uploaded_files = uploaded_files
 
         # Calculate button
         if st.button("计算"):
@@ -156,6 +155,10 @@ class SCCalculator:
             st.error("请先上传CSV文件")
             return
 
+        # Synchronize session state with current text input values
+        st.session_state.ds_input = st.session_state.get("ds_input_field", "").strip()
+        st.session_state.ds1_input = st.session_state.get("ds1_input_field", "").strip()
+
         # Split DS and DS1 inputs using both English and Chinese commas
         ds = [x.strip() for x in re.split(r'[,\uFF0C]', st.session_state.ds_input) if x.strip()]
         ds1 = [x.strip() for x in re.split(r'[,\uFF0C]', st.session_state.ds1_input) if x.strip()]
@@ -165,7 +168,7 @@ class SCCalculator:
             return
 
         if len(ds) != len(ds1):
-            st.error("DS和DS1的条目数量必须相同")
+            st.error(f"DS和DS1的条目数量必须相同 (DS: {len(ds)}, DS1: {len(ds1)})")
             return
 
         st.session_state.result_dfs.clear()

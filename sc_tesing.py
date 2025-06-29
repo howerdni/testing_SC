@@ -73,7 +73,7 @@ class SCCalculator:
                         st.session_state.ds_input = new_ds
                         st.write(f"已追加: {selected_bus}，当前DS输入: {new_ds}")
                         st.session_state.selected_bus = ""  # Reset selection
-                        st.experimental_rerun()  # Force UI refresh
+                        st.rerun()  # Force UI refresh
                     else:
                         st.warning("请先从下拉菜单选择一个母线名")
 

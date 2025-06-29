@@ -69,25 +69,28 @@ class SCCalculator:
                 if st.button("追加到DS", key="append_ds_button"):
                     if selected_bus:
                         current_ds = st.session_state.ds_input.strip()
-                        if current_ds:
-                            st.session_state.ds_input = f"{current_ds}，{selected_bus}"
-                        else:
-                            st.session_state.ds_input = selected_bus
+                        new_ds = selected_bus if not current_ds else f"{current_ds}，{selected_bus}"
+                        st.session_state.ds_input = new_ds
+                        st.write(f"已追加: {selected_bus}，当前DS输入: {new_ds}")
                         st.session_state.selected_bus = ""  # Reset selection
+                    else:
+                        st.warning("请先从下拉菜单选择一个母线名")
                 
                 # JavaScript to handle Enter key press
                 st.markdown("""
                     <script>
                     document.addEventListener('DOMContentLoaded', function() {
                         const selectBox = document.querySelector('select[data-testid="stSelectbox"]');
-                        selectBox.addEventListener('keydown', function(event) {
-                            if (event.key === 'Enter' && this.value !== '') {
-                                const button = document.querySelector('button[data-testid="baseButton-secondary"]');
-                                if (button) {
-                                    button.click();
+                        if (selectBox) {
+                            selectBox.addEventListener('keydown', function(event) {
+                                if (event.key === 'Enter' && this.value !== '') {
+                                    const button = document.querySelector('button[kind="secondary"]');
+                                    if (button) {
+                                        button.click();
+                                    }
                                 }
-                            }
-                        });
+                            });
+                        }
                     });
                     </script>
                 """, unsafe_allow_html=True)

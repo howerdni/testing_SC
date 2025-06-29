@@ -3,6 +3,7 @@ import pandas as pd
 import io
 from openpyxl import Workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
+import re
 
 class SCCalculator:
     def __init__(self):
@@ -21,13 +22,28 @@ class SCCalculator:
             st.session_state.ds_input = ""
         if 'ds1_input' not in st.session_state:
             st.session_state.ds1_input = ""
+        if 'uploaded_files' not in st.session_state:
+            st.session_state.uploaded_files = []
+        if 'selected_bus' not in st.session_state:
+            st.session_state.selected_bus = ""
 
         # File uploader
         st.subheader("上传CSV文件")
         uploaded_files = st.file_uploader("选择CSV文件", type=["csv"], accept_multiple_files=True)
 
-        # Process files when uploaded
-        if uploaded_files and not st.session_state.files_loaded:
+        # Handle file removal or new uploads
+        if not uploaded_files and st.session_state.uploaded_files:
+            # Files were removed
+            st.session_state.files_loaded = False
+            st.session_state.uploaded_files = []
+            st.session_state.bus_names = []
+            st.session_state.result_dfs = {}
+            st.session_state.ds_input = ""
+            st.session_state.ds1_input = ""
+            st.session_state.selected_bus = ""
+            st.info("已移除所有文件，请上传新文件以继续。")
+        elif uploaded_files and uploaded_files != st.session_state.uploaded_files:
+            # New or different files uploaded
             self.load_files(uploaded_files)
 
         # DS and DS1 inputs
@@ -38,13 +54,48 @@ class SCCalculator:
             with col1:
                 st.write("母线名 (DS, 逗号分隔):")
                 ds_input = st.text_input("DS输入", value=st.session_state.ds_input, key="ds_input_field")
-                # Single suggestion dropdown for DS
-                st.write("建议选择:")
-                st.selectbox("选择母线名以复制到DS输入", [""] + st.session_state.bus_names, key="ds_suggest")
+                st.caption("可用中文逗号（，）或英文逗号（,）分隔")
+                
+                # Bus name selection
+                st.write("选择母线名以追加到DS输入:")
+                selected_bus = st.selectbox(
+                    "选择母线名",
+                    [""] + st.session_state.bus_names,
+                    key="ds_suggest",
+                    index=0
+                )
+                
+                # Button to append selected bus name
+                if st.button("追加到DS", key="append_ds_button"):
+                    if selected_bus:
+                        current_ds = st.session_state.ds_input.strip()
+                        if current_ds:
+                            st.session_state.ds_input = f"{current_ds}，{selected_bus}"
+                        else:
+                            st.session_state.ds_input = selected_bus
+                        st.session_state.selected_bus = ""  # Reset selection
+                
+                # JavaScript to handle Enter key press
+                st.markdown("""
+                    <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const selectBox = document.querySelector('select[data-testid="stSelectbox"]');
+                        selectBox.addEventListener('keydown', function(event) {
+                            if (event.key === 'Enter' && this.value !== '') {
+                                const button = document.querySelector('button[data-testid="baseButton-secondary"]');
+                                if (button) {
+                                    button.click();
+                                }
+                            }
+                        });
+                    });
+                    </script>
+                """, unsafe_allow_html=True)
 
             with col2:
                 st.write("显示名称 (DS1, 逗号分隔):")
                 ds1_input = st.text_input("DS1输入", value=st.session_state.ds1_input, key="ds1_input_field")
+                st.caption("可用中文逗号（，）或英文逗号（,）分隔")
 
             # Store inputs
             st.session_state.ds_input = ds_input
@@ -91,6 +142,10 @@ class SCCalculator:
             st.session_state.bus_names = sorted(list(bus_names))
             st.session_state.files_loaded = True
             st.session_state.uploaded_files = uploaded_files
+            st.session_state.result_dfs = {}
+            st.session_state.ds_input = ""
+            st.session_state.ds1_input = ""
+            st.session_state.selected_bus = ""
             st.success("文件加载完成！请在下方输入DS和DS1。")
 
     def calculate(self):
@@ -98,8 +153,9 @@ class SCCalculator:
             st.error("请先上传CSV文件")
             return
 
-        ds = [x.strip() for x in self.ds_input.split(',') if x.strip()]
-        ds1 = [x.strip() for x in self.ds1_input.split(',') if x.strip()]
+        # Split DS and DS1 inputs using both English and Chinese commas
+        ds = [x.strip() for x in re.split(r'[,\uFF0C]', self.ds_input) if x.strip()]
+        ds1 = [x.strip() for x in re.split(r'[,\uFF0C]', self.ds1_input) if x.strip()]
 
         if not ds or not ds1:
             st.error("请填写DS和DS1")
@@ -114,7 +170,6 @@ class SCCalculator:
         for uploaded_file in st.session_state.uploaded_files:
             file_name = uploaded_file.name
             try:
-                # Reset file pointer and read CSV
                 uploaded_file.seek(0)
                 sccp = pd.read_csv(uploaded_file, encoding='gbk', index_col=False)
                 required_columns = ['母线名', '故障类型']
@@ -123,7 +178,6 @@ class SCCalculator:
                     st.error(f"文件 {file_name} 缺少必要列: {', '.join(missing)}")
                     return
 
-                # Ensure fifth column exists
                 if len(sccp.columns) < 5:
                     st.error(f"文件 {file_name} 列数不足，缺少短路电流数据（第5列）")
                     return
@@ -131,7 +185,6 @@ class SCCalculator:
                 S2 = []
                 S1 = []
 
-                # Process data
                 for i in ds:
                     found = False
                     for row in sccp.itertuples():
@@ -146,7 +199,6 @@ class SCCalculator:
                     if not found:
                         st.warning(f"文件 {file_name} 中未找到母线名包含 '{i}' 的记录")
 
-                # Check if any data was found
                 if not S1 and not S2:
                     st.error(f"文件 {file_name} 未找到任何匹配的单相或三相故障数据")
                     return
@@ -173,7 +225,6 @@ class SCCalculator:
                 SD1 = {'substation': substation1, 'sc': sc1}
                 df1 = pd.DataFrame(SD1)
 
-                # Check if DataFrames are empty
                 if df2.empty and df1.empty:
                     st.error(f"文件 {file_name} 处理后未生成有效数据，请检查DS输入和CSV内容")
                     return
@@ -184,7 +235,6 @@ class SCCalculator:
                 DF2 = pd.DataFrame()
                 DF1 = pd.DataFrame()
 
-                # Assign sub_name for three-phase faults
                 for i in df2.index:
                     matched = False
                     for name in X1:
@@ -198,7 +248,6 @@ class SCCalculator:
                 DF2['sub_name'] = df2c['sub_name']
                 DF2['sc'] = df2c['sc']
 
-                # Assign sub_name for single-phase faults
                 for i in df1.index:
                     matched = False
                     for name in X1:
@@ -217,13 +266,9 @@ class SCCalculator:
                 result_df['sc2'] = DF2['sc']
                 result_df['sc1'] = DF1['sc']
 
-                # Handle potential NaN values
                 result_df = result_df.fillna('-')
-
-                # Round results
                 result_df[['sc2', 'sc1']] = result_df[['sc2', 'sc1']].apply(pd.to_numeric, errors='coerce').round(1)
 
-                # Store result
                 st.session_state.result_dfs[file_name] = result_df
 
             except Exception as e:

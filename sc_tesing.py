@@ -75,7 +75,7 @@ class SCCalculator:
                         current_ds = st.session_state.get("ds_input_field", "").strip()
                         new_ds = selected_bus if not current_ds else f"{current_ds}，{selected_bus}"
                         st.session_state.ds_input = new_ds
-                        st.write(f"已追加: {selected_bus}，当前DS输入: {new_ds}")
+                        st.success(f"已追加: {selected_bus}")  # Temporary success message
                         st.session_state.selected_bus = ""  # Reset selection
                         st.rerun()  # Force UI refresh
                     else:

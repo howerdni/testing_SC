@@ -292,4 +292,15 @@ class SCCalculator:
         wb = Workbook()
         wb.remove(wb.active)
 
-        for file_name, df
+        for file_name, df in st.session_state.result_dfs.items():
+            ws = wb.create_sheet(title=file_name)
+            ws['A1'] = file_name
+            for r_idx, row in enumerate(dataframe_to_rows(df, index=False, header=True), 2):
+                for c_idx, value in enumerate(row, 1):
+                    ws.cell(row=r_idx, column=c_idx).value = value
+
+        wb.save(output)
+        return output.getvalue()
+
+if __name__ == "__main__":
+    app = SCCalculator()

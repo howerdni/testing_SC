@@ -178,7 +178,7 @@ class SCCalculator:
             try:
                 uploaded_file.seek(0)
                 sccp = pd.read_csv(uploaded_file, encoding='gbk', index_col=False)
-                required_columns = ['母线名', '故障类型']
+                required_columns = ['母线名', '故障类型', '基电压']
                 if not all(col in sccp.columns for col in required_columns):
                     missing = [col for col in required_columns if col not in sccp.columns]
                     st.error(f"文件 {file_name} 缺少必要列: {', '.join(missing)}")
@@ -197,10 +197,18 @@ class SCCalculator:
                         if i in row.母线名:
                             found = True
                             if row.故障类型 == '单相':
-                                dict_sccp = {row.母线名: row[5]}
+                                dict_sccp = {
+                                    '母线名': row.母线名,
+                                    'sc': row[5],
+                                    '基电压': getattr(row, '基电压', '-')
+                                }
                                 S1.append(dict_sccp)
                             elif row.故障类型 == '三相':
-                                dict_sccp = {row.母线名: row[5]}
+                                dict_sccp = {
+                                    '母线名': row.母线名,
+                                    'sc': row[5],
+                                    '基电压': getattr(row, '基电压', '-')
+                                }
                                 S2.append(dict_sccp)
                     if not found:
                         st.warning(f"文件 {file_name} 中未找到母线名包含 '{i}' 的记录")
@@ -211,24 +219,24 @@ class SCCalculator:
 
                 substation2 = []
                 sc2 = []
+                base_voltage2 = []
                 for i in S2:
-                    keys_values = i.items()
-                    for key, value in keys_values:
-                        substation2.append(key)
-                        sc2.append(value)
+                    substation2.append(i['母线名'])
+                    sc2.append(i['sc'])
+                    base_voltage2.append(i['基电压'])
 
-                SD2 = {'substation': substation2, 'sc': sc2}
+                SD2 = {'substation': substation2, 'sc': sc2, 'base_voltage': base_voltage2}
                 df2 = pd.DataFrame(SD2)
 
                 substation1 = []
                 sc1 = []
+                base_voltage1 = []
                 for i in S1:
-                    keys_values = i.items()
-                    for key, value in keys_values:
-                        substation1.append(key)
-                        sc1.append(value)
+                    substation1.append(i['母线名'])
+                    sc1.append(i['sc'])
+                    base_voltage1.append(i['基电压'])
 
-                SD1 = {'substation': substation1, 'sc': sc1}
+                SD1 = {'substation': substation1, 'sc': sc1, 'base_voltage': base_voltage1}
                 df1 = pd.DataFrame(SD1)
 
                 if df2.empty and df1.empty:
@@ -253,6 +261,7 @@ class SCCalculator:
 
                 DF2['sub_name'] = df2c['sub_name']
                 DF2['sc'] = df2c['sc']
+                DF2['base_voltage'] = df2c['base_voltage']
 
                 for i in df1.index:
                     matched = False
@@ -266,9 +275,11 @@ class SCCalculator:
 
                 DF1['sub_name'] = df1c['sub_name']
                 DF1['sc'] = df1c['sc']
+                DF1['base_voltage'] = df1c['base_voltage']
 
                 result_df = pd.DataFrame()
                 result_df['sub_name'] = DF2['sub_name']
+                result_df['基电压'] = DF2['base_voltage']
                 result_df['三相'] = DF2['sc']
                 result_df['单相'] = DF1['sc']
 
